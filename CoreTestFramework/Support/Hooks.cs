@@ -1,21 +1,20 @@
 using TechTalk.SpecFlow;
 using OpenQA.Selenium;
-using OpenQA.Selenium.Chrome;
-using System.Diagnostics;
 using BoDi;
+using System.Diagnostics;
 
 namespace CoreTestFramework.Support
 {
     /// <summary>
-    /// SpecFlow hooks for test setup and teardown.
-    /// Manages WebDriver lifecycle and test reporting.
+    /// Provides SpecFlow hooks for test lifecycle management.
+    /// Centralizes test lifecycle events and ensures proper cleanup of resources.
     /// </summary>
     [Binding]
     public class Hooks
     {
-        private readonly TestReporter _testReporter;
-        private readonly ScreenshotManager _screenshotManager;
         private readonly WebDriverSupport _webDriverSupport;
+        private readonly TestReporter _testReporter;
+        private readonly TestLogger _logger;
         private readonly ScenarioContext _scenarioContext;
         private readonly FeatureContext _featureContext;
         private readonly Stopwatch _scenarioTimer;
@@ -23,87 +22,66 @@ namespace CoreTestFramework.Support
         public Hooks(
             WebDriverSupport webDriverSupport,
             TestReporter testReporter,
-            ScreenshotManager screenshotManager,
+            TestLogger logger,
             ScenarioContext scenarioContext,
             FeatureContext featureContext)
         {
             _webDriverSupport = webDriverSupport;
             _testReporter = testReporter;
-            _screenshotManager = screenshotManager;
+            _logger = logger;
             _scenarioContext = scenarioContext;
             _featureContext = featureContext;
             _scenarioTimer = new Stopwatch();
         }
 
         [BeforeScenario]
-        public void BeforeScenario()
+        public void BeforeScenario(IObjectContainer container)
         {
-            var options = new ChromeOptions();
-            options.AddArgument("--headless=new");
-            
-            _webDriverSupport.Driver = new ChromeDriver(options);
-            _webDriverSupport.Driver.Manage().Window.Maximize();
-            
             _scenarioTimer.Start();
+            _webDriverSupport.InitializeDriver();
+            container.RegisterInstanceAs(_webDriverSupport.Driver);
         }
 
         [AfterScenario]
         public void AfterScenario()
         {
             _scenarioTimer.Stop();
-            
-            try
+
+            // If there was an error, capture screenshot
+            string? screenshotPath = null;
+            if (_scenarioContext.TestError != null)
             {
-                if (_scenarioContext.TestError != null)
-                {
-                    var errorMessage = _scenarioContext.TestError.Message;
-                    var screenshotPath = _screenshotManager.CaptureScreenshot(_webDriverSupport.Driver, "ScenarioFailure");
-                    if (screenshotPath != null)
-                    {
-                        Console.WriteLine($"Test failed. Final state screenshot saved as: {screenshotPath}");
-                        Console.WriteLine($"Error: {errorMessage}");
-                    }
-                    
-                    _testReporter.LogTestResult(
-                        _featureContext.FeatureInfo.Title,
-                        _scenarioContext.ScenarioInfo.Title,
-                        "Failed",
-                        _scenarioTimer.Elapsed,
-                        errorMessage,
-                        screenshotPath
-                    );
-                }
-                else
-                {
-                    _testReporter.LogTestResult(
-                        _featureContext.FeatureInfo.Title,
-                        _scenarioContext.ScenarioInfo.Title,
-                        "Passed",
-                        _scenarioTimer.Elapsed
-                    );
-                }
+                var screenshotManager = new ScreenshotManager(_testReporter.ScreenshotsDirectory);
+                screenshotPath = screenshotManager.CaptureScreenshot(_webDriverSupport.Driver, "TestFailure");
             }
-            finally
-            {
-                _webDriverSupport.Dispose();
-            }
+
+            // Log final test result
+            _testReporter.LogTestResult(
+                _featureContext.FeatureInfo.Title,
+                _scenarioContext.ScenarioInfo.Title,
+                _scenarioContext.TestError == null ? "Passed" : "Failed",
+                _scenarioTimer.Elapsed,
+                _scenarioContext.TestError?.Message,
+                screenshotPath
+            );
+
+            _webDriverSupport.CleanupDriver();
         }
 
         [BeforeTestRun]
         public static void BeforeTestRun(IObjectContainer container)
         {
-            // Register core services in the correct order
-            var webDriverSupport = new WebDriverSupport(container);
-            container.RegisterInstanceAs(webDriverSupport);
+            var webDriverSupport = new WebDriverSupport();
+            container.RegisterInstanceAs<WebDriverSupport>(webDriverSupport);
 
             var testReporter = new TestReporter();
-            container.RegisterInstanceAs(testReporter);
+            container.RegisterInstanceAs<TestReporter>(testReporter);
 
-            var screenshotManager = new ScreenshotManager(
-                testReporter.ScreenshotsDirectory,
-                testReporter.RunTimestamp
-            );
-            container.RegisterInstanceAs(screenshotManager);
+            var screenshotManager = new ScreenshotManager(testReporter.ScreenshotsDirectory);
+            container.RegisterInstanceAs<ScreenshotManager>(screenshotManager);
+
+            var testLogger = new TestLogger(testReporter);
+            container.RegisterInstanceAs<TestLogger>(testLogger);
         }
 
         [AfterTestRun]

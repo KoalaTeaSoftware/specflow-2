@@ -1,56 +1,37 @@
 using TechTalk.SpecFlow;
+using System;
 
 namespace CoreTestFramework.Support
 {
     /// <summary>
-    /// Provides logging capabilities for test execution, focusing on diagnostic information.
-    /// Separates diagnostic logging from test result reporting to maintain clear separation of concerns.
+    /// Provides logging capabilities for test execution.
+    /// Focuses on diagnostic information, separating logging from test result reporting.
     /// </summary>
     public class TestLogger
     {
         private readonly TestReporter _testReporter;
-        private readonly ScenarioContext _scenarioContext;
-        private readonly FeatureContext _featureContext;
 
-        public TestLogger(
-            TestReporter testReporter,
-            ScenarioContext scenarioContext,
-            FeatureContext featureContext)
+        public TestLogger(TestReporter testReporter)
         {
             _testReporter = testReporter;
-            _scenarioContext = scenarioContext;
-            _featureContext = featureContext;
         }
 
         /// <summary>
-        /// Logs diagnostic information for debugging and troubleshooting.
-        /// This information is intended for developers and testers to understand test behavior.
+        /// Logs diagnostic information during test execution.
+        /// Used for tracking test progress and debugging.
         /// </summary>
         public void LogDiagnostic(string message)
         {
-            Console.WriteLine($"[Diagnostic] {message}");
+            _testReporter.LogDiagnosticMessage(message);
         }
 
         /// <summary>
-        /// Logs an error with diagnostic information for the current test.
-        /// This is separate from test result reporting to maintain clear separation of concerns.
+        /// Logs errors with diagnostic information for the current test.
+        /// Ensures clarity in error reporting and separation from test result logging.
         /// </summary>
-        public void LogError(string errorMessage, string? screenshotPath = null)
+        public void LogError(string errorMessage, string featureTitle, string scenarioTitle, string? screenshotPath = null)
         {
-            Console.WriteLine($"[Error] {errorMessage}");
-            if (screenshotPath != null)
-            {
-                Console.WriteLine($"[Screenshot] {screenshotPath}");
-            }
-
-            _testReporter.LogTestResult(
-                _featureContext.FeatureInfo.Title,
-                _scenarioContext.ScenarioInfo.Title,
-                "Failed",
-                TimeSpan.Zero,  // Errors can happen at any point
-                errorMessage,
-                screenshotPath
-            );
+            _testReporter.LogTestResult(featureTitle, scenarioTitle, "Failed", TimeSpan.Zero, errorMessage, screenshotPath);
         }
     }
 }

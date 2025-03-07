@@ -4,35 +4,41 @@ using System.IO;
 
 namespace CoreTestFramework.Support
 {
+    /// <summary>
+    /// Manages screenshot capture and storage for test failures.
+    /// Ensures screenshots are properly named and stored in the test report directory.
+    /// </summary>
     public class ScreenshotManager
     {
         private readonly string _screenshotsDirectory;
-        private readonly string _runTimestamp;
 
-        public ScreenshotManager(string screenshotsDirectory, string runTimestamp)
+        public ScreenshotManager(string screenshotsDirectory)
         {
             _screenshotsDirectory = screenshotsDirectory ?? throw new ArgumentNullException(nameof(screenshotsDirectory));
-            _runTimestamp = runTimestamp ?? throw new ArgumentNullException(nameof(runTimestamp));
         }
 
-        public string ScreenshotsDirectory => _screenshotsDirectory;
-        public string RunTimestamp => _runTimestamp;
-
-        public string CaptureScreenshot(IWebDriver driver, string namePrefix)
+        /// <summary>
+        /// Captures a screenshot of the current browser state.
+        /// </summary>
+        /// <param name="driver">The WebDriver instance to capture from</param>
+        /// <param name="screenshotName">Base name for the screenshot file</param>
+        /// <returns>Path to the saved screenshot, or null if capture failed</returns>
+        public string? CaptureScreenshot(IWebDriver driver, string screenshotName)
         {
             try
             {
+                var timestamp = DateTime.Now.ToString("HHmmss");
+                var fileName = $"{screenshotName}_{timestamp}.png";
+                var filePath = Path.Combine(_screenshotsDirectory, fileName);
+
                 var screenshot = ((ITakesScreenshot)driver).GetScreenshot();
-                var filename = $"{namePrefix}_{_runTimestamp}.png";
-                var screenshotPath = Path.Combine(_screenshotsDirectory, filename);
-                screenshot.SaveAsFile(screenshotPath);
-                Console.WriteLine($"Screenshot saved to: {screenshotPath}");
-                return filename; // Return just filename for report linking
+                screenshot.SaveAsFile(filePath);
+
+                return filePath;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Failed to capture screenshot: {ex.Message}");
-                return string.Empty;
+                return null;
             }
         }
     }

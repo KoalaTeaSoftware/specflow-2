@@ -1,17 +1,17 @@
 using System.Text;
-using TechTalk.SpecFlow;
 
 namespace CoreTestFramework.Support
 {
     /// <summary>
     /// Handles diagnostic test reporting, focusing on information not covered by SpecFlow Living Documentation.
-    /// Specifically captures screenshots, error details, and execution metrics to aid in debugging and quality assurance.
+    /// Specifically captures screenshots, error details, execution metrics, and diagnostic messages to aid in debugging and quality assurance.
     /// </summary>
     public class TestReporter
     {
         private readonly string _reportDirectory;
         private readonly string _screenshotsDirectory;
         private readonly List<TestResult> _testResults;
+        private readonly List<DiagnosticMessage> _diagnosticMessages;
         private readonly string _runTimestamp;
 
         public TestReporter()
@@ -30,6 +30,7 @@ namespace CoreTestFramework.Support
             _reportDirectory = Path.Combine(solutionRoot, "TestReports", $"Run_{_runTimestamp}");
             _screenshotsDirectory = Path.Combine(_reportDirectory, "Screenshots");
             _testResults = new List<TestResult>();
+            _diagnosticMessages = new List<DiagnosticMessage>();
 
             Directory.CreateDirectory(_reportDirectory);
             Directory.CreateDirectory(_screenshotsDirectory);
@@ -60,46 +61,32 @@ namespace CoreTestFramework.Support
         }
 
         /// <summary>
-        /// Generates a diagnostic report focusing on test execution details, screenshots, and errors.
+        /// Records diagnostic messages during test execution.
+        /// Used for tracking test progress and debugging.
+        /// </summary>
+        public void LogDiagnosticMessage(string message)
+        {
+            var diagnosticMessage = new DiagnosticMessage
+            {
+                Message = message,
+                Timestamp = DateTime.Now
+            };
+
+            _diagnosticMessages.Add(diagnosticMessage);
+        }
+
+        /// <summary>
+        /// Generates a diagnostic report focusing on test execution details, screenshots, errors, and diagnostic messages.
         /// For feature documentation and scenario descriptions, refer to the SpecFlow Living Documentation.
         /// </summary>
         public void GenerateReport()
         {
-            var templatePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Support", "TestReport.html");
-            var projectTemplatePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "Support", "TestReport.html");
-
-            if (!File.Exists(templatePath) && File.Exists(projectTemplatePath))
-            {
-                Directory.CreateDirectory(Path.GetDirectoryName(templatePath)!);
-                File.Copy(projectTemplatePath, templatePath);
-            }
-
+            var templatePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "Support", "TestReport.html");
             if (!File.Exists(templatePath))
             {
-                // Create a basic template if none exists
-                var basicTemplate = @"<!DOCTYPE html>
-<html>
-<head>
-    <title>Test Execution Report</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        .failure { border: 1px solid #ddd; padding: 10px; margin: 10px 0; }
-        .error-details { background: #f8f8f8; padding: 10px; }
-        .screenshot img { max-width: 800px; }
-    </style>
-</head>
-<body>
-    <h1>Test Execution Report - {{RunDate}}</h1>
-    <div class='summary'>
-        <p>Total Tests: {{TotalTests}}</p>
-        <p>Failed Tests: {{FailedTests}}</p>
-        <p>Total Duration: {{TotalDuration}}s</p>
-    </div>
-    {{FailuresSection}}
-</body>
-</html>";
-                Directory.CreateDirectory(Path.GetDirectoryName(templatePath)!);
-                File.WriteAllText(templatePath, basicTemplate);
+                throw new FileNotFoundException(
+                    "TestReport.html template not found in Support directory. " +
+                    "Please ensure the template exists at: " + templatePath);
             }
 
             var template = File.ReadAllText(templatePath);
@@ -129,6 +116,17 @@ namespace CoreTestFramework.Support
                     </div>");
             }
 
+            // Generate diagnostic messages HTML
+            var diagnosticsHtml = new StringBuilder();
+            foreach (var message in _diagnosticMessages)
+            {
+                diagnosticsHtml.AppendLine($@"
+                    <div class='diagnostic-message'>
+                        <span class='timestamp'>{message.Timestamp:HH:mm:ss}</span>
+                        <span class='message'>{message.Message}</span>
+                    </div>");
+            }
+
             // Replace placeholders in template
             var report = template
                 .Replace("{{RunDate}}", _runTimestamp)
@@ -139,6 +137,11 @@ namespace CoreTestFramework.Support
                     <div class='failures'>
                         <h2>Failed Tests</h2>
                         {failuresHtml}
+                    </div>" : "")
+                .Replace("{{DiagnosticsSection}}", _diagnosticMessages.Any() ? $@"
+                    <div class='diagnostics'>
+                        <h2>Diagnostic Messages</h2>
+                        {diagnosticsHtml}
                     </div>" : "");
 
             var reportPath = Path.Combine(_reportDirectory, "TestDiagnostics.html");
@@ -153,6 +156,12 @@ namespace CoreTestFramework.Support
             public TimeSpan Duration { get; set; }
             public string? ErrorMessage { get; set; }
             public string? ScreenshotPath { get; set; }
+            public DateTime Timestamp { get; set; }
+        }
+
+        private class DiagnosticMessage
+        {
+            public string Message { get; set; } = "";
             public DateTime Timestamp { get; set; }
         }
     }
