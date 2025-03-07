@@ -6,6 +6,10 @@ using CoreTestFramework.Fixtures;
 
 namespace CoreTestFramework.StepDefinitions
 {
+    /// <summary>
+    /// Step definitions for website navigation.
+    /// Provides Gherkin bindings for common browser navigation actions.
+    /// </summary>
     [Binding]
     public class WebsiteNavigationSteps
     {
@@ -23,17 +27,9 @@ namespace CoreTestFramework.StepDefinitions
         [Given(@"the browser shows the home page")]
         public void GivenTheBrowserShowsTheHomePage()
         {
-            Assert.That(_navigationActions.NavigateToUrl(_config.BaseUrl), 
+            Assert.That(_navigationActions.NavigateTo(_config.BaseUrl), 
                 Is.True, 
                 $"Failed to navigate to home page at {_config.BaseUrl}");
-        }
-
-        [Then(@"the page title is ""(.*)""")]
-        public void ThenThePageTitleIs(string expectedTitle)
-        {
-            var actualTitle = _webDriverSupport.GetPageTitle();
-            StringAssert.IsMatch(expectedTitle, actualTitle, 
-                $"Expected page title to match pattern '{expectedTitle}' but got '{actualTitle}'");
         }
     }
 }

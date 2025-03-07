@@ -40,15 +40,10 @@ namespace CoreTestFramework.Support
         public string RunTimestamp => _runTimestamp;
 
         /// <summary>
-        /// Records diagnostic information for a test execution.
+        /// Records test execution result with timing information.
+        /// Used by test hooks to record final test status and duration.
         /// </summary>
-        public void AddTestResult(
-            string featureTitle,
-            string scenarioTitle,
-            string status,
-            TimeSpan duration,
-            string? errorMessage = null,
-            string? screenshotPath = null)
+        public void LogTestResult(string featureTitle, string scenarioTitle, string status, TimeSpan duration, string? errorMessage = null, string? screenshotPath = null)
         {
             var result = new TestResult
             {
@@ -70,113 +65,84 @@ namespace CoreTestFramework.Support
         /// </summary>
         public void GenerateReport()
         {
-            var html = new StringBuilder();
-            html.AppendLine("<!DOCTYPE html>");
-            html.AppendLine("<html lang='en'>");
-            html.AppendLine("<head>");
-            html.AppendLine("    <meta charset='UTF-8'>");
-            html.AppendLine("    <meta name='viewport' content='width=device-width, initial-scale=1.0'>");
-            html.AppendLine("    <title>Test Diagnostics Report</title>");
-            html.AppendLine("    <style>");
-            html.AppendLine("        :root { --primary-color: #0066cc; --success-color: #28a745; --danger-color: #dc3545; }");
-            html.AppendLine("        body { font-family: system-ui, -apple-system, sans-serif; margin: 0; padding: 20px; background: #f8f9fa; }");
-            html.AppendLine("        .container { max-width: 1200px; margin: 0 auto; background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }");
-            html.AppendLine("        .header { background: var(--primary-color); color: white; padding: 20px; border-radius: 8px 8px 0 0; }");
-            html.AppendLine("        .content { padding: 20px; }");
-            html.AppendLine("        .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px; }");
-            html.AppendLine("        .metric-card { background: #f8f9fa; padding: 20px; border-radius: 8px; text-align: center; }");
-            html.AppendLine("        .metric-card h3 { margin: 0 0 10px 0; color: var(--primary-color); }");
-            html.AppendLine("        .metric-value { font-size: 24px; font-weight: bold; }");
-            html.AppendLine("        .failures { margin-top: 30px; }");
-            html.AppendLine("        .failure { background: #fff5f5; border-radius: 8px; padding: 20px; margin-bottom: 20px; }");
-            html.AppendLine("        .failure h3 { color: var(--danger-color); margin: 0 0 10px 0; }");
-            html.AppendLine("        .error-details { background: #f8f9fa; padding: 15px; border-radius: 4px; margin: 10px 0; }");
-            html.AppendLine("        .screenshot { margin: 20px 0; }");
-            html.AppendLine("        .screenshot img { max-width: 100%; border-radius: 4px; border: 1px solid #ddd; }");
-            html.AppendLine("        .execution-time { color: #666; font-size: 0.9em; }");
-            html.AppendLine("        .info-box { background: #e7f5ff; border-radius: 8px; padding: 15px; margin: 20px 0; }");
-            html.AppendLine("        .info-box a { color: var(--primary-color); }");
-            html.AppendLine("    </style>");
-            html.AppendLine("</head>");
-            html.AppendLine("<body>");
-            html.AppendLine("<div class='container'>");
+            var templatePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Support", "TestReport.html");
+            var projectTemplatePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "Support", "TestReport.html");
 
-            // Header
-            html.AppendLine("<div class='header'>");
-            html.AppendLine("    <h1>Test Diagnostics Report</h1>");
-            html.AppendLine($"    <p>Run Date: {_runTimestamp}</p>");
-            html.AppendLine("</div>");
-            html.AppendLine("<div class='content'>");
+            if (!File.Exists(templatePath) && File.Exists(projectTemplatePath))
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(templatePath)!);
+                File.Copy(projectTemplatePath, templatePath);
+            }
 
-            // Info Box
-            html.AppendLine("<div class='info-box'>");
-            html.AppendLine("    <p><strong>Note:</strong> This report focuses on diagnostic information and test execution details. ");
-            html.AppendLine("    For feature documentation and scenario descriptions, please refer to the ");
-            html.AppendLine("    <a href='LivingDoc.html'>SpecFlow Living Documentation</a>.</p>");
-            html.AppendLine("</div>");
+            if (!File.Exists(templatePath))
+            {
+                // Create a basic template if none exists
+                var basicTemplate = @"<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Execution Report</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .failure { border: 1px solid #ddd; padding: 10px; margin: 10px 0; }
+        .error-details { background: #f8f8f8; padding: 10px; }
+        .screenshot img { max-width: 800px; }
+    </style>
+</head>
+<body>
+    <h1>Test Execution Report - {{RunDate}}</h1>
+    <div class='summary'>
+        <p>Total Tests: {{TotalTests}}</p>
+        <p>Failed Tests: {{FailedTests}}</p>
+        <p>Total Duration: {{TotalDuration}}s</p>
+    </div>
+    {{FailuresSection}}
+</body>
+</html>";
+                Directory.CreateDirectory(Path.GetDirectoryName(templatePath)!);
+                File.WriteAllText(templatePath, basicTemplate);
+            }
 
-            // Execution Metrics
+            var template = File.ReadAllText(templatePath);
+            
+            // Calculate metrics
             var totalTests = _testResults.Count;
             var failedTests = _testResults.Count(r => r.Status == "Failed");
             var totalDuration = TimeSpan.FromSeconds(_testResults.Sum(r => r.Duration.TotalSeconds));
 
-            html.AppendLine("<div class='metrics'>");
-            html.AppendLine("    <div class='metric-card'>");
-            html.AppendLine("        <h3>Total Tests</h3>");
-            html.AppendLine($"        <div class='metric-value'>{totalTests}</div>");
-            html.AppendLine("    </div>");
-            html.AppendLine("    <div class='metric-card'>");
-            html.AppendLine("        <h3>Failed Tests</h3>");
-            html.AppendLine($"        <div class='metric-value' style='color: var(--danger-color)'>{failedTests}</div>");
-            html.AppendLine("    </div>");
-            html.AppendLine("    <div class='metric-card'>");
-            html.AppendLine("        <h3>Total Duration</h3>");
-            html.AppendLine($"        <div class='metric-value'>{totalDuration.TotalSeconds:F1}s</div>");
-            html.AppendLine("    </div>");
-            html.AppendLine("</div>");
-
-            // Failed Tests Section
-            if (failedTests > 0)
+            // Generate failures HTML
+            var failuresHtml = new StringBuilder();
+            foreach (var failure in _testResults.Where(r => r.Status == "Failed"))
             {
-                html.AppendLine("<div class='failures'>");
-                html.AppendLine("    <h2>Failed Tests</h2>");
-
-                foreach (var failure in _testResults.Where(r => r.Status == "Failed"))
-                {
-                    html.AppendLine("    <div class='failure'>");
-                    html.AppendLine($"        <h3>{failure.ScenarioTitle}</h3>");
-                    html.AppendLine($"        <div class='execution-time'>Executed at {failure.Timestamp:HH:mm:ss} (Duration: {failure.Duration.TotalSeconds:F1}s)</div>");
-                    
-                    if (!string.IsNullOrEmpty(failure.ErrorMessage))
-                    {
-                        html.AppendLine("        <div class='error-details'>");
-                        html.AppendLine($"            <pre>{failure.ErrorMessage}</pre>");
-                        html.AppendLine("        </div>");
-                    }
-
-                    if (!string.IsNullOrEmpty(failure.ScreenshotPath))
-                    {
-                        html.AppendLine("        <div class='screenshot'>");
-                        html.AppendLine("            <p><strong>Failure Screenshot:</strong></p>");
-                        html.AppendLine($"            <img src='Screenshots/{failure.ScreenshotPath}' alt='Test Failure Screenshot'>");
-                        html.AppendLine("        </div>");
-                    }
-
-                    html.AppendLine("    </div>");
-                }
-
-                html.AppendLine("</div>");
+                failuresHtml.AppendLine($@"
+                    <div class='failure'>
+                        <h3>{failure.ScenarioTitle}</h3>
+                        <div class='execution-time'>Executed at {failure.Timestamp:HH:mm:ss} (Duration: {failure.Duration.TotalSeconds:F1}s)</div>
+                        {(failure.ErrorMessage != null ? $@"
+                        <div class='error-details'>
+                            <pre>{failure.ErrorMessage}</pre>
+                        </div>" : "")}
+                        {(failure.ScreenshotPath != null ? $@"
+                        <div class='screenshot'>
+                            <p><strong>Failure Screenshot:</strong></p>
+                            <img src='Screenshots/{failure.ScreenshotPath}' alt='Test Failure Screenshot'>
+                        </div>" : "")}
+                    </div>");
             }
 
-            html.AppendLine("</div>");
-            html.AppendLine("</div>");
-            html.AppendLine("</body>");
-            html.AppendLine("</html>");
+            // Replace placeholders in template
+            var report = template
+                .Replace("{{RunDate}}", _runTimestamp)
+                .Replace("{{TotalTests}}", totalTests.ToString())
+                .Replace("{{FailedTests}}", failedTests.ToString())
+                .Replace("{{TotalDuration}}", totalDuration.TotalSeconds.ToString("F1"))
+                .Replace("{{FailuresSection}}", failedTests > 0 ? $@"
+                    <div class='failures'>
+                        <h2>Failed Tests</h2>
+                        {failuresHtml}
+                    </div>" : "");
 
             var reportPath = Path.Combine(_reportDirectory, "TestDiagnostics.html");
-            File.WriteAllText(reportPath, html.ToString());
-            Console.WriteLine($"\nDiagnostic report generated at: {reportPath}");
-            Console.WriteLine("For feature documentation, see: LivingDoc.html in the same directory");
+            File.WriteAllText(reportPath, report);
         }
 
         private class TestResult
